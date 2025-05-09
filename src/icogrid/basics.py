@@ -1,8 +1,10 @@
 "Icosahedral grid generator."
 from math import sqrt, atan2
 import numpy as np
-from anglelib.vecmath import rotate
-from numba import njit
+from scipy.spatial.transform import Rotation
+from numba import njit, prange
+import jax
+import jax.numpy as jnp
 
 
 def make_icosahedron():
@@ -24,7 +26,9 @@ def make_icosahedron():
         (-1, r3, (3+r5)/2),
     ]
     # Rotate to align two vertices on Z axis.
-    icosahedron = rotate(icosahedron, "Y", -atan2(icosahedron[10][0], icosahedron[10][2]))
+    icosahedron = Rotation.from_rotvec(
+        -atan2(icosahedron[10][0], icosahedron[10][2]) * np.array([0, 1, 0])
+    ).apply(icosahedron)
     # Make sure these vertices have exact zeros in X and Y coordinates.
     icosahedron[1, (0, 1)] = 0.
     icosahedron[10, (0, 1)] = 0.
@@ -76,6 +80,7 @@ def divide_triangle(vertices: np.ndarray, triangle: np.ndarray, n: int):
     triangles, indices: tuple
         triangles: list of vertices of the triangles.
         indices: list of tuples, indices of each vertex of triangles.
+        The lengths of these are the same and is equal to n**2.
     """
     ia: int
     ib: int
@@ -89,12 +94,13 @@ def divide_triangle(vertices: np.ndarray, triangle: np.ndarray, n: int):
     a, b, c = vertices[ia], vertices[ib], vertices[ic]
     
     # Lazy way of determining the number of items `m` in the array...
-    m = 0
-    for i in range(n):
-        for j in range(i+1):
-            m += 1
-            if j != i:
-                m += 1
+    # m = 0
+    # for i in range(n):
+    #     for j in range(i+1):
+    #         m += 1
+    #         if j != i:
+    #             m += 1
+    m = n**2
 
     u = (b - a) / n
     v = (c - b) / n
@@ -139,66 +145,87 @@ def divide_triangle(vertices: np.ndarray, triangle: np.ndarray, n: int):
 
 
 @njit(cache=True)
+def _divide_triangle(icosahedron, triangle, n):
+    "Call divide_triangle and return the points and indices."
+    tri, ind = divide_triangle(icosahedron, triangle, n)
+    
+    m = 3 * n**2
+    
+    indices = np.empty((m, 6), dtype=np.int64)
+    points = np.empty((m, 3), dtype=np.float64)
+    for j, i, t in zip(range(m), ind.reshape(-1, 2, 3), tri.reshape(-1, 3)):
+        (ia, ib, ii), (jb, jc, jj) = i
+        if ii == 0: # a
+            assert jj == 0
+            ib = ia
+            jb = -1
+            jc = -1
+        elif ii == n and jj == 0: # b
+            ia = ib
+            ii = 0
+            jb = -1
+            jc = -1
+        elif ii == n and jj == n: # c
+            ia = jc
+            ib = jc
+            ii = 0
+            jb = -1
+            jc = -1
+            jj = 0
+        elif ii == n: # on bc
+            ia = jb
+            ib = jc
+            ii = jj
+            jb = -1
+            jc = -1
+            jj = 0
+        elif ii == jj: # on ac
+            ib = jc
+            jb = -1
+            jc = -1
+            jj = 0
+
+        if jj == 0: # on ab
+            jb = -1
+            jc = -1
+
+        if ia > ib:
+            ia, ib = ib, ia
+            ii = n - ii
+
+        if jb > jc:
+            jb, jc = jc, jb
+            jj = n - jj
+        
+        if jb != -1 and ia > jb:
+            ia, ib, ii, jb, jc, jj = jb, jc, jj, ia, ib, ii
+
+        # i = (ia, ib, ii), (jb, jc, jj)
+        indices[j, :] = np.array([ia, ib, ii, jb, jc, jj])
+        points[j, :] = t
+    return points, indices
+
+
+@njit(cache=True, parallel=True)
 def _make_icogrid(icosahedron, triangles, n):
     "icogrid body."
-    points = {}
-    for triangle in triangles:
-        tri, ind = divide_triangle(icosahedron, triangle, n)
+    # points = {}
+    # for triangle in triangles:
+    nt = len(triangles)
+    m = 3*n**2
+    points = np.empty((m*nt, 3), dtype=np.float64)
+    indices = np.empty((m*nt, 6), dtype=np.int64)
+    for it in prange(nt):
+        ib = it * m
+        ie = ib + m
+        _points, _indices = _divide_triangle(icosahedron, triangles[it], n)
+        points[ib:ie, :] = _points
+        indices[ib:ie, :] = _indices
+    return points, indices
 
-        # for i, t in zip(chain.from_iterable(ind), chain.from_iterable(tri)):
-        for i, t in zip(ind.reshape(-1, 2, 3), tri.reshape(-1, 3)):
-            (ia, ib, ii), (jb, jc, jj) = i
-            if ii == 0: # a
-                assert jj == 0
-                ib = ia
-                jb = -1
-                jc = -1
-            elif ii == n and jj == 0: # b
-                ia = ib
-                ii = 0
-                jb = -1
-                jc = -1
-            elif ii == n and jj == n: # c
-                ia = jc
-                ib = jc
-                ii = 0
-                jb = -1
-                jc = -1
-                jj = 0
-            elif ii == n: # on bc
-                ia = jb
-                ib = jc
-                ii = jj
-                jb = -1
-                jc = -1
-                jj = 0
-            elif ii == jj: # on ac
-                ib = jc
-                jb = -1
-                jc = -1
-                jj = 0
 
-            if jj == 0: # on ab
-                jb = -1
-                jc = -1
-
-            if ia > ib:
-                ia, ib = ib, ia
-                ii = n - ii
-
-            if jb > jc:
-                jb, jc = jc, jb
-                jj = n - jj
-            
-            if jb != -1 and ia > jb:
-                ia, ib, ii, jb, jc, jj = jb, jc, jj, ia, ib, ii
-
-            i = (ia, ib, ii), (jb, jc, jj)
-            points[i] = t
-
-    points = list(points.values())
-    assert len(points) == 10 * n**2 + 2
-    return points
+# jitted version of np.unique
+jit_unique = jax.jit(jnp.unique, static_argnames=["return_index", "size", "axis"])
 
 
 def make_icogrid(n: int):
@@ -220,7 +247,11 @@ def make_icogrid(n: int):
 
     icosahedron = make_icosahedron()
     triangles = make_triangles()
-    points = _make_icogrid(icosahedron, triangles, n)
+    _points, _indices = _make_icogrid(icosahedron, triangles, n)
+    _, idx = jit_unique(_indices, axis=0, return_index=True, size=10 * n**2 + 2)
+    # _, idx = np.unique(_indices, axis=0, return_index=True)
+    points = _points[idx]
+    assert len(points) == 10 * n**2 + 2
     points = np.array(points) / np.linalg.norm(points, axis=-1, keepdims=True)
     return points
 
@@ -252,6 +283,14 @@ def ndiv_from_angle(
     return n
 
 
-if __name__ != "__main__":
-    # precompile
-    _ = _make_icogrid(make_icosahedron(), make_triangles(), 1)
+# precompile
+import time
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # デフォルトではWARNINGなので注意
+
+start = time.time()
+logger.info("Compiling Numba functions...")
+_ = _make_icogrid(make_icosahedron(), make_triangles(), 1)
+elapsed = time.time() - start
+logger.info(f"Numba compilation completed in {elapsed:.2f} seconds.")
