@@ -26,12 +26,15 @@ class Icogrid:
         """
         return Icogrid(ndiv_from_angle(separation, degrees=degrees))
 
-    def to_direction(self):
+    def to_direction(self, degrees: bool = False):
         """Return directions of vertices in radians."""
-        return np.column_stack((
+        results = np.column_stack((
             np.arccos(self.vertices[:, 2] / np.linalg.norm(self.vertices, axis=-1)),
             np.arctan2(self.vertices[:, 1], self.vertices[:, 0])
         ))
+        if degrees:
+            results = np.rad2deg(results)
+        return results
 
     def __iter__(self):
         return iter(self.vertices)
