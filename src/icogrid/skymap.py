@@ -43,6 +43,16 @@ def radial(ze, az, r: float = None, degrees: bool = False):
         return x, y, z
 
 
+def direction(xyz: np.ndarray, degrees: bool = False):
+    results = np.column_stack((
+        np.arccos(xyz[:, 2] / np.linalg.norm(xyz, axis=-1)),
+        np.arctan2(xyz[:, 1], xyz[:, 0])
+    ))
+    if degrees:
+        results = np.rad2deg(results)
+    return results
+
+
 def xygrid(x, y, r: float = None, da=None, dx=None, dy=None, nx=50, ny=50):
     """Create a grid of points in the x-y plane.
 
