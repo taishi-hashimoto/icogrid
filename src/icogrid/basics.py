@@ -225,7 +225,7 @@ def _make_icogrid(icosahedron, triangles, n):
 
 
 # jitted version of np.unique
-jit_unique = jax.jit(jnp.unique, static_argnames=["return_index", "size", "axis"])
+_unique = jax.jit(jnp.unique, static_argnames=["return_index", "size", "axis"])
 
 
 def make_icogrid(n: int):
@@ -248,8 +248,7 @@ def make_icogrid(n: int):
     icosahedron = make_icosahedron()
     triangles = make_triangles()
     _points, _indices = _make_icogrid(icosahedron, triangles, n)
-    _, idx = jit_unique(_indices, axis=0, return_index=True, size=10 * n**2 + 2)
-    # _, idx = np.unique(_indices, axis=0, return_index=True)
+    _, idx = _unique(_indices, axis=0, return_index=True, size=10 * n**2 + 2)
     points = _points[idx]
     assert len(points) == 10 * n**2 + 2
     points = np.array(points) / np.linalg.norm(points, axis=-1, keepdims=True)
