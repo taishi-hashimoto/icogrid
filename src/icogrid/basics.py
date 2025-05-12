@@ -286,7 +286,7 @@ def ndiv_from_angle(
 import time
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # デフォルトではWARNINGなので注意
+logger.setLevel(logging.INFO)
 
 start = time.time()
 logger.info("Compiling Numba functions...")
