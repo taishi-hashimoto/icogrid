@@ -97,6 +97,40 @@ def xygrid(x, y, r: float = None, da=None, dx=None, dy=None, nx=50, ny=50):
 def triang_skymap(
     ze, az, r=None,
     degrees: bool=False,
+    polar: bool = False
+):
+    """Triangulate the specified ze, az grid in the x-y plane.
+    
+    Parameters
+    ==========
+    ze: ndarray of float
+        Zenith angles in radians.
+    az: ndarray of float
+        Azimuth angles in radians.
+    r: float
+        Distance from the origin to the grid points.
+    degrees: bool
+        If True, ze and az are in degrees.
+    """
+    if polar or r is None:  # polar plot mode.
+        if degrees:
+            az = np.deg2rad(az)
+        else:
+            ze = np.rad2deg(ze)
+        # theta, r -> x, y
+        x, y = PolarTransform().transform(np.c_[az, ze]).T
+        tri = Triangulation(x, y)
+    else:
+        if r is None:
+            raise ValueError("r must be specified for 3D triangulation.")
+        x, y, _ = radial(ze, az, r, degrees=degrees)
+        tri = Triangulation(x, y)
+    return tri
+
+
+def triang_xygrid(
+    ze, az, r=None,
+    degrees: bool=False,
     da: float = None,
     dx: float = None, dy: float = None,
     nx: int = 50, ny: int = 50,
@@ -129,8 +163,8 @@ def triang_skymap(
     return x_g, y_g, triang
 
 
-def interp_skymap(
-    x_g, y_g, triang,  # From triang_skymap
+def interp_xygrid(
+    x_g, y_g, triang,  # From triang_xygrid
     values
 ):
     interp = LinearTriInterpolator(triang, values)
@@ -139,9 +173,13 @@ def interp_skymap(
 
 def plot_skymap(
     ax: Axes,
-    ze: np.ndarray, az: np.ndarray, data: np.ndarray,
+    data: np.ndarray,
+    ze: np.ndarray = None,
+    az: np.ndarray = None, 
     r: float = None,
-    projection=None,
+    tri: Triangulation = None,
+    degrees: bool = False,
+    pcolor: bool = False,
     **kwargs
 ):
     """
@@ -159,33 +197,37 @@ def plot_skymap(
         Data to be plotted.
     r: float
         Distance from the origin to the grid points.
-    projection: str
-        Projection type. If None, a polar plot will be created.
+    tri: Triangulation
+        Triangulation object. If None, a new triangulation will be created.
+    degrees: bool
+        If True, ze and az are in degrees.
     kwargs: dict
         Keyword arguments for the tripcolor plot.
     """
-    assert len(ze) == len(az) == len(data), (
-        f"ze{np.shape(ze)}, az{np.shape(az)}, and data{np.shape(data)} must have the same length."
-    )
-    if isinstance(ax, PolarAxes):
-        # polar plot mode.
-        projection = PolarTransform()
-        # theta, r -> x, y
-        x, y = projection.transform(np.c_[np.deg2rad(az), ze]).T
-        tri = Triangulation(x, y)
+    polar = isinstance(ax, PolarAxes)
+    if tri is None:
+        assert len(ze) == len(az) == len(data), (
+            f"ze{np.shape(ze)}, az{np.shape(az)}, and data{np.shape(data)} must have the same length."
+        )
+        tri = triang_skymap(ze, az, r, degrees, polar)
+    else:
+        assert len(data) == len(tri.x), (
+            f"data{np.shape(data)} and triangulation{np.shape(tri.x)} must have the same length."
+        )
+    if pcolor:
+        method = ax.tripcolor
+    else:
+        method = ax.tricontourf
+    if polar:
         # tri is already in polar coordinates, so it is canceled out by proj.inverted().
-        tpc = ax.tripcolor(
+        tpc = method(
             tri, data,
-            transform=projection.inverted() + ax.transData,
+            transform=PolarTransform().inverted() + ax.transData,
             **kwargs)
         ax.set_rlim(0)
     else:
-        if r is None:
-            raise ValueError("r must be specified for non-polar plots.")
-        x, y, _ = radial(ze, az, r, degrees=True)
-        tri = Triangulation(x, y)
-        tpc = ax.tripcolor(tri, data, **kwargs)
+        tpc = method(tri, data, **kwargs)
         ax.set_aspect("equal")
-    ax.grid()
+    ax.grid(True)
 
     return tpc

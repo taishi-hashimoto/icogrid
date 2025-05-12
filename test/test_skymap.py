@@ -19,17 +19,16 @@ if __name__ == "__main__":
     data =  np.abs(az_g - 30) * np.abs(ze_g - 5)
 
     fig, ax = plt.subplots()
-    tpc = plot_skymap(ax, ze_g, az_g, data, r=r, projection='polar', cmap='viridis', shading='flat')
+    tpc = plot_skymap(ax, data, ze=ze_g, az=az_g,  r=r, cmap='viridis', shading='flat', degrees=True)
     plt.colorbar(tpc, ax=ax, shrink=0.6, orientation='horizontal', label='Example value')
 
     # %%
     fig, ax = plt.subplots(subplot_kw=dict(projection="polar"), figsize=(6, 6))
     tpc = plot_skymap(
-        ax, ze_g, az_g, data,
-        r=r,
-        projection='polar',
+        ax, data, ze=ze_g, az=az_g,
+        degrees=True,
         cmap='viridis',
-        shading='flat'
+        shading='flat',
     )
 
     # Other settings for polar axes.

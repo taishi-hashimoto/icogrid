@@ -188,10 +188,10 @@ class Icogrid:
                 **fig_kw)
         return plot_skymap(
             ax=ax,
+            data=data,
             ze=ze, az=az,
             r=self.radius,
-            data=data,
-            projection=projection,
+            degrees=True,
             **kwargs
         )
 
