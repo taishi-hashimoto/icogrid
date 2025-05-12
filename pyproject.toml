@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "icogrid"
-description = "Icosahedral grid generator with numba"
+description = "3-d quasi-equispaced angular grid based on icosahedral subdivision"
 authors = [
   {name = "Taishi Hashimoto", email = "hashimoto.taishi@nipr.ac.jp"},
 ]
@@ -13,9 +13,9 @@ requires-python = ">= 3.7"
 dependencies = [
     "numpy",
     "scipy",
-    "jax",
-    "numba",
     "matplotlib",
+    "numba",
+    "jax",
 ]
 
 [project.optional-dependencies]

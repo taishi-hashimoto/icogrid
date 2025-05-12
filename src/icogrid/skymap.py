@@ -1,12 +1,18 @@
-# %%
+"Module for plotting skymaps on icogrid."
 import numpy as np
+from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 from matplotlib.projections.polar import PolarAxes, PolarTransform
 from matplotlib.tri import LinearTriInterpolator, Triangulation
 from matplotlib.axes import Axes
 
 
-def radial(ze, az, r: float = None, degrees: bool = False):
+def radial(
+    ze: NDArray[np.float_],
+    az: NDArray[np.float_],
+    r: float = None,
+    degrees: bool = False
+):
     """Convert zenith and azimuth angles to radial coordinates.
 
     This function assumes 
@@ -43,14 +49,14 @@ def radial(ze, az, r: float = None, degrees: bool = False):
         return x, y, z
 
 
-def direction(xyz: np.ndarray, degrees: bool = False):
-    results = np.column_stack((
-        np.arccos(xyz[:, 2] / np.linalg.norm(xyz, axis=-1)),
-        np.arctan2(xyz[:, 1], xyz[:, 0])
-    ))
+def direction(xyz: NDArray[np.float_], degrees: bool = False):
+    "Inverse of radial for 3-d case."
+    ze: NDArray[np.float_] = np.arccos(xyz[..., 2] / np.linalg.norm(xyz, axis=-1))
+    az: NDArray[np.float_] = np.arctan2(xyz[..., 1], xyz[..., 0])
     if degrees:
-        results = np.rad2deg(results)
-    return results
+        ze = np.rad2deg(ze)
+        az = np.rad2deg(az)
+    return ze, az
 
 
 def xygrid(x, y, r: float = None, da=None, dx=None, dy=None, nx=50, ny=50):
@@ -145,29 +151,22 @@ def plot_skymap(
     ==========
     ax: Axes
         Axes to plot on. If None, a new figure and axes will be created.
+    ze: array-like
+        Zenith angles in radians.
+    az: array-like
+        Azimuth angles in radians.
     data: array-like
         Data to be plotted.
-    projection: str
-        Projection type. If None, a polar plot will be created.
-    zemin: float
-        Minimum zenith angle for the plot.
-    zemax: float
-        Maximum zenith angle for the plot.
-    azmin: float
-        Minimum azimuth angle for the plot.
-    azmax: float
-        Maximum azimuth angle for the plot.
     r: float
         Distance from the origin to the grid points.
-    fig_kw: dict
-        Keyword arguments for the figure.
-    subplot_kw: dict
-        Keyword arguments for the subplot.
-    gridspec_kw: dict
-        Keyword arguments for the gridspec.
+    projection: str
+        Projection type. If None, a polar plot will be created.
     kwargs: dict
         Keyword arguments for the tripcolor plot.
     """
+    assert len(ze) == len(az) == len(data), (
+        f"ze{np.shape(ze)}, az{np.shape(az)}, and data{np.shape(data)} must have the same length."
+    )
     if isinstance(ax, PolarAxes):
         # polar plot mode.
         projection = PolarTransform()
@@ -179,6 +178,7 @@ def plot_skymap(
             tri, data,
             transform=projection.inverted() + ax.transData,
             **kwargs)
+        ax.set_rlim(0)
     else:
         if r is None:
             raise ValueError("r must be specified for non-polar plots.")
@@ -189,47 +189,3 @@ def plot_skymap(
     ax.grid()
 
     return tpc
-
-
-# %% Evaluation grid.
-if __name__ == "__main__":
-    from icogrid import Icogrid
-    # Angular evaluation grid.
-    angular_separation = 1
-    zeaz = Icogrid.from_angular_separation(angular_separation, degrees=True).to_direction(degrees=True)
-    zeaz = zeaz[zeaz[:, 0] < 10]
-    # zeaz = zeaz[zeaz[:, 1] < np.deg2rad(90)]
-    ndir = len(zeaz)
-    
-    r = 80e3
-    
-    ze_g, az_g = zeaz.T
-    
-    data =  np.abs(az_g - 30) * np.abs(ze_g - 5)
-
-    fig, ax = plt.subplots()
-    tpc = plot_skymap(ax, ze_g, az_g, data, r=r, projection='polar', cmap='viridis', shading='flat')
-    plt.colorbar(tpc, ax=ax, shrink=0.6, orientation='horizontal', label='Example value')
-
-    # %%
-    fig, ax = plt.subplots(subplot_kw=dict(projection="polar"), figsize=(6, 6))
-    tpc = plot_skymap(
-        ax, ze_g, az_g, data,
-        r=r,
-        projection='polar',
-        zemin=0, zemax=10,
-        azmin=0, azmax=360,
-        cmap='viridis',
-        shading='flat'
-    )
-
-    # Other settings for polar axes.
-    # ax.set_theta_zero_location('N')
-    # ax.set_theta_direction(-1)
-    ax.set_rlim(0, 10)
-
-    plt.colorbar(tpc, ax=ax, shrink=0.6, orientation='horizontal', label='Example value')
-    plt.title("Triangulated Data on Polar Plot")
-    plt.show()
-
-# %%
