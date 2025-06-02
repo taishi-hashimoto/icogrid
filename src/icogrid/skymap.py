@@ -8,8 +8,8 @@ from matplotlib.axes import Axes
 
 
 def radial(
-    ze: NDArray[np.float_],
-    az: NDArray[np.float_],
+    ze: NDArray[np.float64],
+    az: NDArray[np.float64],
     r: float = None,
     degrees: bool = False
 ):
@@ -49,10 +49,10 @@ def radial(
         return x, y, z
 
 
-def direction(xyz: NDArray[np.float_], degrees: bool = False):
+def direction(xyz: NDArray[np.float64], degrees: bool = False):
     "Inverse of radial for 3-d case."
-    ze: NDArray[np.float_] = np.arccos(xyz[..., 2] / np.linalg.norm(xyz, axis=-1))
-    az: NDArray[np.float_] = np.arctan2(xyz[..., 1], xyz[..., 0])
+    ze: NDArray[np.float64] = np.arccos(xyz[..., 2] / np.linalg.norm(xyz, axis=-1))
+    az: NDArray[np.float64] = np.arctan2(xyz[..., 1], xyz[..., 0])
     if degrees:
         ze = np.rad2deg(ze)
         az = np.rad2deg(az)
